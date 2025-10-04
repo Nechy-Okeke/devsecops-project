@@ -66,14 +66,42 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    - name: Check if stack exists
+      id: check_stack
+      run: |
+        if aws cloudformation describe-stacks --stack-name DevSecOpsStack; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
     - name: Create Change Set
+      if: steps.check_stack.outputs.exists == 'true'
       run: |
         aws cloudformation create-change-set \
           --stack-name DevSecOpsStack \
           --template-body file://cloudformation/template.yml \
           --parameters ParameterKey=CodeBucket,ParameterValue=${{ secrets.AWS_S3_BUCKET }} ParameterKey=CodeKey,ParameterValue=lambda-function.zip \
           --change-set-name MyChangeSet \
-          --description "DevSecOps deployment"
+          --description "DevSecOps deployment" \
+          --change-set-type UPDATE
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+    - name: Create Stack
+      if: steps.check_stack.outputs.exists == 'false'
+      run: |
+        aws cloudformation create-stack \
+          --stack-name DevSecOpsStack \
+          --template-body file://cloudformation/template.yml \
+          --parameters ParameterKey=CodeBucket,ParameterValue=${{ secrets.AWS_S3_BUCKET }} ParameterKey=CodeKey,ParameterValue=lambda-function.zip \
+          --capabilities CAPABILITY_NAMED_IAM
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

@@ -1,5 +1,7 @@
 # DevSecOps Project
 
+<!-- DevSecOps CI/CD pipeline with AWS CloudFormation, GitHub Actions, and OWASP ZAP security scanning -->
+
 [![CI/CD](https://github.com/yourusername/devsecops-project/actions/workflows/deploy.yml/badge.svg)](https://github.com/yourusername/devsecops-project/actions/workflows/deploy.yml)
 [![CodeQL](https://github.com/yourusername/devsecops-project/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/yourusername/devsecops-project/actions/workflows/codeql-analysis.yml)
 
@@ -58,3 +60,4 @@ This project uses CloudFormation change sets to review and approve changes befor
 ## Contributing
 
 Feel free to open issues or PRs for improvements.
+#

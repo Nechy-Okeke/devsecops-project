@@ -9,13 +9,13 @@
 - [x] Create README with documentation and badges
 - [x] Add OWASP ZAP scan script
 - [x] Add .gitignore
+- [x] Initialize Git repository
+- [x] Create GitHub repository
+- [x] Push code to GitHub and trigger pipeline
 
 ## Pending
-- [ ] Initialize Git repository
-- [ ] Create GitHub repository
 - [ ] Set up AWS credentials and S3 bucket
 - [ ] Configure GitHub secrets
-- [ ] Push code to GitHub and trigger pipeline
 - [ ] Test the deployed API
 - [ ] Verify security scans (CodeQL, ZAP)
 - [ ] Add monitoring (CloudWatch) if desired

@@ -37,11 +37,20 @@ A comprehensive DevSecOps CI/CD pipeline demonstrating secure deployment of a se
    - `AWS_SECRET_ACCESS_KEY`: Your AWS secret key.
    - `AWS_REGION`: e.g., us-east-1
    - `AWS_S3_BUCKET`: Your S3 bucket name.
+   - `DOCKER_USERNAME`: Your Docker Hub username (optional, if using Docker in workflow).
+   - `DOCKER_PASSWORD`: Your Docker Hub PAT (optional).
 
-4. **Push to GitHub**:
-   - Create a new repo on GitHub.
-   - Push the code.
-   - The pipeline will trigger on push to main.
+4. **Run the pipeline**:
+   - Push code to GitHub to trigger the workflow.
+   - The pipeline will build, test, scan, and deploy your API.
+
+5. **Run OWASP ZAP scan locally**:
+   - Ensure Docker is installed and running.
+   - Run the scan script against your deployed API URL:
+     ```bash
+     ./scripts/zap-scan.sh https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/hello
+     ```
+   - The scan report will be saved as `zap_report.html`.
 
 ## API Usage
 
@@ -58,7 +67,3 @@ This project uses CloudFormation change sets to review and approve changes befor
 ## Contributing
 
 Feel free to open issues or PRs for improvements.
-
-<!--
-This README was updated on 2025-10-04 to include workflow fixes for stack creation and updates.
--->

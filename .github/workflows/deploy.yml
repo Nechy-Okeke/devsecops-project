@@ -160,7 +160,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     - name: Run OWASP ZAP Scan
-      uses: actions-hub/zap-baseline@v1.0.0
+      uses: zaproxy/action-baseline@v0.8.0
       with:
         target: ${{ steps.api-url.outputs.url }}
         rules_file_name: '.zap/rules.tsv'

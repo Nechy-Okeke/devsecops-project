@@ -43,16 +43,40 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
+      # Optional: Configure AWS credentials (if your target app is deployed on AWS)
+      - name: Configure AWS Credentials
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
       - name: Run OWASP ZAP Baseline Scan
         run: |
           echo "Starting OWASP ZAP baseline scan..."
-          docker run --rm -v $(pwd):/zap/wrk -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-            -t https://example.com \
-            -r zap_report.html || true
+          # You can replace this URL with your own app or API endpoint
+          TARGET_URL="https://asnfau8lo5.execute-api.us-east-1.amazonaws.com/prod/hello"
 
-      - name: Upload ZAP Scan Report
+          echo "Scanning target: $TARGET_URL"
+          docker run --rm \
+            -v $(pwd):/zap/wrk:rw \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t "$TARGET_URL" \
+            -r zap_report.html \
+            -J zap_report.json \
+            -w zap_report.md \
+            -I || true
+
+          echo "ZAP baseline scan completed."
+          ls -l zap_report.*
+
+      - name: Upload ZAP Scan Reports
         uses: actions/upload-artifact@v4
         with:
-          name: zap-scan-report
-          path: zap_report.html
-#
+          name: zap-scan-reports
+          path: |
+            zap_report.html
+            zap_report.json
+            zap_report.md

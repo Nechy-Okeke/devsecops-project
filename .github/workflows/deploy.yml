@@ -5,6 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -81,14 +82,34 @@ jobs:
 
     - name: Create Change Set
       if: steps.check_stack.outputs.exists == 'true'
+      id: create_change_set
       run: |
+        set -e
         aws cloudformation create-change-set \
           --stack-name DevSecOpsStack \
           --template-body file://cloudformation/template.yml \
           --parameters ParameterKey=CodeBucket,ParameterValue=${{ secrets.AWS_S3_BUCKET }} ParameterKey=CodeKey,ParameterValue=lambda-function.zip \
           --change-set-name MyChangeSet \
           --description "DevSecOps deployment" \
-          --change-set-type UPDATE
+          --capabilities CAPABILITY_NAMED_IAM \
+          --change-set-type UPDATE || true
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+    - name: Check Change Set Status
+      if: steps.check_stack.outputs.exists == 'true'
+      id: check_change_set
+      run: |
+        STATUS=$(aws cloudformation describe-change-set --stack-name DevSecOpsStack --change-set-name MyChangeSet --query 'Status' --output text)
+        if [ "$STATUS" = "FAILED" ]; then
+          echo "No changes detected, skipping deployment."
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "Changes detected, proceeding with deployment."
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -107,6 +128,8 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     - name: Wait for Change Set
+      if: steps.check_stack.outputs.exists == 'true' && steps.check_change_set.outputs.skip == 'false'
+      continue-on-error: true
       run: |
         aws cloudformation wait change-set-create-complete --stack-name DevSecOpsStack --change-set-name MyChangeSet
       env:
@@ -114,6 +137,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     - name: Execute Change Set
+      if: steps.check_stack.outputs.exists == 'true' && steps.check_change_set.outputs.skip == 'false'
       run: |
         aws cloudformation execute-change-set --stack-name DevSecOpsStack --change-set-name MyChangeSet
       env:

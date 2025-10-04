@@ -2,8 +2,8 @@
 
 <!-- DevSecOps CI/CD pipeline with AWS CloudFormation, GitHub Actions, and OWASP ZAP security scanning -->
 
-[![CI/CD](https://github.com/yourusername/devsecops-project/actions/workflows/deploy.yml/badge.svg)](https://github.com/yourusername/devsecops-project/actions/workflows/deploy.yml)
-[![CodeQL](https://github.com/yourusername/devsecops-project/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/yourusername/devsecops-project/actions/workflows/codeql-analysis.yml)
+[![CI/CD](https://github.com/Nechy-Okeke/devsecops-project/actions/workflows/deploy.yml/badge.svg)](https://github.com/Nechy-Okeke/devsecops-project/actions/workflows/deploy.yml)
+[![CodeQL](https://github.com/Nechy-Okeke/devsecops-project/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/Nechy-Okeke/devsecops-project/actions/workflows/codeql-analysis.yml)
 
 A comprehensive DevSecOps CI/CD pipeline demonstrating secure deployment of a serverless API using AWS CloudFormation, GitHub Actions, and OWASP ZAP for security scanning.
 

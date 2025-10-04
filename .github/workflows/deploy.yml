@@ -150,11 +150,6 @@ jobs:
     needs: deploy
     steps:
     - uses: actions/checkout@v3
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Get API URL
       id: api-url
       run: |
@@ -165,7 +160,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     - name: Run OWASP ZAP Scan
-      uses: zaproxy/action-baseline@v0.8.0
+      uses: actions-hub/zap-baseline@v1.0.0
       with:
         target: ${{ steps.api-url.outputs.url }}
         rules_file_name: '.zap/rules.tsv'

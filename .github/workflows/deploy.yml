@@ -12,26 +12,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '18'
+
     - name: Install dependencies
       run: |
         cd app
         npm install
+
     - name: Lint
       run: |
         cd app
         npm run lint
+
     - name: Test
       run: |
         cd app
         npm run test
+
     - name: Package Lambda
       run: |
         cd app
         zip -r ../lambda-function.zip .
+
     - name: Upload to S3
       run: |
         aws s3 cp lambda-function.zip s3://${{ secrets.AWS_S3_BUCKET }}/lambda-function.zip
@@ -45,12 +51,15 @@ jobs:
     needs: build-and-test
     steps:
     - uses: actions/checkout@v3
+
     - name: Run CodeQL
       uses: github/codeql-action/init@v2
       with:
         languages: javascript
+
     - name: Autobuild
       uses: github/codeql-action/autobuild@v2
+
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
 
@@ -60,6 +69,7 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
     - uses: actions/checkout@v3
+
     - name: Validate CloudFormation
       run: |
         aws cloudformation validate-template --template-body file://cloudformation/template.yml
@@ -67,6 +77,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
     - name: Check if stack exists
       id: check_stack
       run: |
@@ -127,6 +138,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
     - name: Wait for Change Set
       if: steps.check_stack.outputs.exists == 'true' && steps.check_change_set.outputs.skip == 'false'
       continue-on-error: true
@@ -136,6 +148,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
     - name: Execute Change Set
       if: steps.check_stack.outputs.exists == 'true' && steps.check_change_set.outputs.skip == 'false'
       run: |
@@ -150,18 +163,26 @@ jobs:
     needs: deploy
     steps:
     - uses: actions/checkout@v3
+
+    - name: Ensure .zap rules file exists
+      run: |
+        mkdir -p .zap
+        touch .zap/rules.tsv
+
     - name: Get API URL
       id: api-url
       run: |
         API_URL=$(aws cloudformation describe-stacks --stack-name DevSecOpsStack --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text)
-        echo "::set-output name=url::$API_URL"
+        echo "url=$API_URL" >> $GITHUB_OUTPUT
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-    - name: Run OWASP ZAP Scan
-      uses: zaproxy/action-baseline@v0.8.0
+
+    - name: Run OWASP ZAP Baseline Scan
+      uses: zaproxy/action-baseline@v0.10.0
       with:
         target: ${{ steps.api-url.outputs.url }}
+        docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
         rules_file_name: '.zap/rules.tsv'
         cmd_options: '-a'

@@ -1,0 +1,17 @@
+{
+  "name": "devsecops-api",
+  "version": "1.0.0",
+  "description": "A simple DevSecOps API for demonstration",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint index.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "eslint": "^8.0.0"
+  },
+  "author": "Your Name",
+  "license": "MIT"
+}

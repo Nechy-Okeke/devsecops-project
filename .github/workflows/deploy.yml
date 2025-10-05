@@ -41,6 +41,7 @@ jobs:
           ls -la
           zip -r ../app.zip .
           ls -la ../
+        working-directory: ./app # Ensure zipping happens from the 'app' directory
 
       - name: Verify app.zip exists
         run: ls -la ../app.zip
@@ -70,8 +71,29 @@ jobs:
       - name: Get API URL from CloudFormation outputs
         id: get-api-url
         run: |
+          # Use jq for reliable JSON parsing, or simplify if only one output is needed
           API_URL=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
           echo "API_URL=$API_URL" >> $GITHUB_ENV
+          echo "The Deployed API URL is: $API_URL"
+
+      - name: Wait for AppRunner service to become healthy (Optional but recommended)
+        # Add a short delay to ensure App Runner service is ready to receive traffic before scanning
+        run: sleep 60s
 
       - name: Run OWASP ZAP Scan
-        run: bash ./scripts/zap-scan.sh ${{ env.API_URL }} --skip-zap
+        # This step runs your ZAP script against the newly deployed URL
+        run: bash ./scripts/zap-scan.sh ${{ env.API_URL }}
+
+      # --- NEW STEP 1: Upload the ZAP Report ---
+      - name: Upload ZAP Scan Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: ZAP-Security-Report
+          # *** IMPORTANT: UPDATE THIS PATH IF YOUR SCRIPT SAVES THE REPORT ELSEWHERE ***
+          path: ZAP_Report.html 
+          if-no-files-found: warn
+
+      # --- NEW STEP 2: Optional Cleanup (Highly Recommended) ---
+      - name: Clean up deployed stack (Optional for testing, depends on environment)
+        # You may want to comment this out if you need the service to persist
+        run: aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}

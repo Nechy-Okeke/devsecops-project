@@ -56,7 +56,7 @@ jobs:
         run: aws s3 cp ../app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}
 
       - name: Run OWASP ZAP Scan
-        run: bash ./scripts/zap-scan.sh
+        run: bash ./scripts/zap-scan.sh ${{ steps.deploy.outputs.ApiUrl }}
 
       - name: Deploy CloudFormation stack
         run: |

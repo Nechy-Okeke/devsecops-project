@@ -29,12 +29,14 @@ jobs:
             --template-file cloudformation/template.yml \
             --stack-name DevSecOpsAppRunnerStack \
             --capabilities CAPABILITY_IAM \
-            --region us-east-1
+            --region us-east-1 \
+            --parameter-overrides \
+              CodeBucket=my-app-bucket-name \
+              CodeKey=app.zip
 
       - name: Get App Runner Service URL
         run: |
-          SERVICE_URL=$(aws cloudformation describe-stacks \
+          aws cloudformation describe-stacks \
             --stack-name DevSecOpsAppRunnerStack \
             --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" \
-            --output text)
-          echo "App Runner Service URL: $SERVICE_URL"
+            --output text

@@ -1,104 +1,78 @@
 name: DevSecOps CI/CD Pipeline
 
 on:
-  push:
-    branches:
-      - main
+  push:
+    branches:
+      - main
 
 jobs:
-  build-test-scan-deploy:
-    runs-on: ubuntu-latest
+  build-test-scan-deploy:
+    runs-on: ubuntu-latest
 
-    env:
-      AWS_REGION: us-east-1
-      S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-      S3_KEY: app.zip
-      STACK_NAME: DevSecOpsAppRunnerStack
+    env:
+      AWS_REGION: us-east-1
+      S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      S3_KEY: app.zip
+      STACK_NAME: DevSecOpsAppRunnerStack
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-      - name: Install dependencies
-        run: npm install
-        working-directory: ./app
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./app
 
-      - name: Run tests
-        run: npm test
-        working-directory: ./app
+      - name: Run tests
+        run: npm test
+        working-directory: ./app
 
-      - name: Install zip utility
-        run: sudo apt-get update && sudo apt-get install -y zip
+      - name: Install zip utility
+        run: sudo apt-get update && sudo apt-get install -y zip
 
-      - name: Build app zip
-        run: |
-          pwd
-          ls -la
-          zip -r ../app.zip .
-          ls -la ../
-        working-directory: ./app # Ensure zipping happens from the 'app' directory
+      - name: Build app zip
+        run: |
+          pwd
+          ls -la
+          zip -r ../app.zip .
+          ls -la ../
 
-      - name: Verify app.zip exists
-        run: ls -la app.zip # FIX: Changed path from ../app.zip to app.zip
+      - name: Verify app.zip exists
+        run: ls -la ../app.zip
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Upload app.zip to S3
-        run: aws s3 cp app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }} # FIX: Changed path from ../app.zip to app.zip
+      - name: Upload app.zip to S3
+        run: aws s3 cp ../app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}
 
-      - name: Deploy CloudFormation stack
-        id: deploy-stack
-        run: |
-          aws cloudformation deploy \
-            --template-file cloudformation/template.yml \
-            --stack-name ${{ env.STACK_NAME }} \
-            --capabilities CAPABILITY_IAM \
-            --region ${{ env.AWS_REGION }} \
-            --parameter-overrides \
-              CodeBucket=${{ env.S3_BUCKET }} \
-              CodeKey=${{ env.S3_KEY }}
+      - name: Deploy CloudFormation stack
+        id: deploy-stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/template.yml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --capabilities CAPABILITY_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --parameter-overrides \
+              CodeBucket=${{ env.S3_BUCKET }} \
+              CodeKey=${{ env.S3_KEY }}
 
-      - name: Get API URL from CloudFormation outputs
-        id: get-api-url
-        run: |
-          # Use jq for reliable JSON parsing, or simplify if only one output is needed
-          API_URL=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
-          echo "API_URL=$API_URL" >> $GITHUB_ENV
-          echo "The Deployed API URL is: $API_URL"
+      - name: Get API URL from CloudFormation outputs
+        id: get-api-url
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "API_URL=$API_URL" >> $GITHUB_ENV
 
-      - name: Wait for AppRunner service to become healthy (Optional but recommended)
-        # Add a short delay to ensure App Runner service is ready to receive traffic before scanning
-        run: sleep 60s
-
-      # --- CONSOLIDATED STEP: Using Official ZAP Action for reliability ---
-      - name: Run OWASP ZAP Full Scan and Report Generation
-        # This action handles Docker pull, scan execution, and report generation internally.
-        uses: zaproxy/action-fullscan@v0.12.0
-        with:
-          target: ${{ env.API_URL }}
-          # Explicitly set the output filename to match the subsequent upload step
-          report_name: ZAP_Report.html
-
-      # --- UPDATED STEP: NOW USING V4 (Non-Deprecated) ---
-      - name: Upload ZAP Scan Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: ZAP-Security-Report
-          # Path now strictly matches the report_name defined in the ZAP action
-          path: ZAP_Report.html 
-          if-no-files-found: error
-
-      # --- Optional Cleanup (Highly Recommended) ---
-      - name: Clean up deployed stack (Optional for testing, depends on environment)
-        # You may want to comment this out if you need the service to persist
-        run: aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}
+      - name: Run OWASP ZAP Scan
+        run: bash ./scripts/zap-scan.sh ${{ env.API_URL }} --skip-zap
+this is my workflow so where will i get the report

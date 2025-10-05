@@ -80,29 +80,23 @@ jobs:
         # Add a short delay to ensure App Runner service is ready to receive traffic before scanning
         run: sleep 60s
 
-      # --- NEW STEP: Explicitly pull the ZAP Docker image ---
-      - name: Pre-pull ZAP Docker Image
-        run: docker pull owasp/zap2docker-stable:stable
-      
-      # --- MODIFIED STEP: Use explicit tag for increased reliability ---
-      - name: Run OWASP ZAP Full Scan
-        # Runs the ZAP scan using the official, stable Docker image.
-        # It mounts the current directory (pwd) to /zap/wrk in the container 
-        # so the report file is saved in the repository root.
-        run: |
-          docker run \
-            -v ${{ github.workspace }}:/zap/wrk/:rw \
-            owasp/zap2docker-stable:stable \
-            zap-full-scan.py -t ${{ env.API_URL }} -r /zap/wrk/ZAP_Report.html
+      # --- CONSOLIDATED STEP: Using Official ZAP Action for reliability ---
+      - name: Run OWASP ZAP Full Scan and Report Generation
+        # This action handles Docker pull, scan execution, and report generation internally.
+        uses: zaproxy/action-fullscan@v0.12.0
+        with:
+          target: ${{ env.API_URL }}
+          # Explicitly set the output filename to match the subsequent upload step
+          report_name: ZAP_Report.html
 
       # --- UPDATED STEP: NOW USING V4 (Non-Deprecated) ---
       - name: Upload ZAP Scan Report
         uses: actions/upload-artifact@v4
         with:
           name: ZAP-Security-Report
-          # The report path is confirmed to be ZAP_Report.html from the step above
+          # Path now strictly matches the report_name defined in the ZAP action
           path: ZAP_Report.html 
-          if-no-files-found: warn
+          if-no-files-found: error
 
       # --- Optional Cleanup (Highly Recommended) ---
       - name: Clean up deployed stack (Optional for testing, depends on environment)

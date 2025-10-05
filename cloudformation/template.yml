@@ -1,83 +1,85 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DevSecOps Serverless API Stack'
+Description: 'DevSecOps Serverless API Stack - Fixed for unique resource naming.'
 
 Parameters:
-  CodeBucket:
-    Type: String
-    Description: S3 bucket containing the Lambda code
-  CodeKey:
-    Type: String
-    Description: S3 key for the Lambda code zip
+CodeBucket:
+Type: String
+Description: S3 bucket containing the Lambda code
+CodeKey:
+Type: String
+Description: S3 key for the Lambda code zip
 
 Resources:
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+LambdaExecutionRole:
+Type: AWS::IAM::Role
+Properties:
+AssumeRolePolicyDocument:
+Version: '2012-10-17'
+Statement:
+- Effect: Allow
+Principal:
+Service: lambda.amazonaws.com
+Action: sts:AssumeRole
+ManagedPolicyArns:
+- arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  ApiFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: DevSecOpsApiFunction
-      Runtime: nodejs18.x
-      Handler: index.handler
-      Code:
-        S3Bucket: !Ref CodeBucket
-        S3Key: !Ref CodeKey
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30
+ApiFunction:
+Type: AWS::Lambda::Function
+Properties:
+# FIX APPLIED: Removed 'FunctionName' property. CloudFormation will now
+# generate a unique name (e.g., DevSecOpsAppRunnerStack-ApiFunction-XYZ)
+# preventing the conflict error.
+Runtime: nodejs18.x
+Handler: index.handler
+Code:
+S3Bucket: !Ref CodeBucket
+S3Key: !Ref CodeKey
+Role: !GetAtt LambdaExecutionRole.Arn
+Timeout: 30
 
-  ApiGateway:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: DevSecOpsApi
-      Description: API for DevSecOps demo
+ApiGateway:
+Type: AWS::ApiGateway::RestApi
+Properties:
+Name: DevSecOpsApi
+Description: API for DevSecOps demo
 
-  ApiResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: 'hello'
+ApiResource:
+Type: AWS::ApiGateway::Resource
+Properties:
+RestApiId: !Ref ApiGateway
+ParentId: !GetAtt ApiGateway.RootResourceId
+PathPart: 'hello'
 
-  ApiMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiResource
-      HttpMethod: GET
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiFunction.Arn}/invocations
+ApiMethod:
+Type: AWS::ApiGateway::Method
+Properties:
+RestApiId: !Ref ApiGateway
+ResourceId: !Ref ApiResource
+HttpMethod: GET
+AuthorizationType: NONE
+Integration:
+Type: AWS_PROXY
+IntegrationHttpMethod: POST
+Uri: !Sub arn:aws:apigateway:AWS::Region:lambda:path/2015−03−31/functions/{ApiFunction.Arn}/invocations
 
-  ApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiMethod
-    Properties:
-      RestApiId: !Ref ApiGateway
-      StageName: prod
+ApiDeployment:
+Type: AWS::ApiGateway::Deployment
+DependsOn: ApiMethod
+Properties:
+RestApiId: !Ref ApiGateway
+StageName: prod
 
-  LambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ApiFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:apigateway:${AWS::Region}::${ApiGateway}/*
+LambdaPermission:
+Type: AWS::Lambda::Permission
+Properties:
+FunctionName: !Ref ApiFunction
+Action: lambda:InvokeFunction
+Principal: apigateway.amazonaws.com
+SourceArn: !Sub arn:aws:apigateway:AWS::Region::{ApiGateway}/*
 
 Outputs:
-  ApiUrl:
-    Description: URL of the API Gateway
-    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/hello
-    Export:
-      Name: DevSecOpsApiUrlManual
+ApiUrl:
+Description: URL of the API Gateway
+Value: !Sub https://ApiGateway.execute−api.{AWS::Region}.amazonaws.com/prod/hello
+Export:
+Name: DevSecOpsApiUrlManual

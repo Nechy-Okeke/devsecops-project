@@ -44,7 +44,7 @@ jobs:
         working-directory: ./app # Ensure zipping happens from the 'app' directory
 
       - name: Verify app.zip exists
-        run: ls -la ../app.zip
+        run: ls -la app.zip # FIX: Changed path from ../app.zip to app.zip
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -54,7 +54,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload app.zip to S3
-        run: aws s3 cp ../app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}
+        run: aws s3 cp app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }} # FIX: Changed path from ../app.zip to app.zip
 
       - name: Deploy CloudFormation stack
         id: deploy-stack

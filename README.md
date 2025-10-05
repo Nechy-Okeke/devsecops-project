@@ -67,4 +67,3 @@ This project uses CloudFormation change sets to review and approve changes befor
 ## Contributing
 
 Feel free to open issues or PRs for improvements.
-###

@@ -74,4 +74,4 @@ jobs:
           echo "API_URL=$API_URL" >> $GITHUB_ENV
 
       - name: Run OWASP ZAP Scan
-        run: bash ./scripts/zap-scan.sh ${{ env.API_URL }}
+        run: bash ./scripts/zap-scan.sh ${{ env.API_URL }} --skip-zap

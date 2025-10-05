@@ -39,12 +39,11 @@ jobs:
         run: |
           pwd
           ls -la
-          zip -r app.zip .
-          ls -la
-        working-directory: ./app
+          zip -r ../app.zip .
+          ls -la ../
 
       - name: Verify app.zip exists
-        run: ls -la ./app.zip
+        run: ls -la ../app.zip
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -54,7 +53,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload app.zip to S3
-        run: aws s3 cp ./app/app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}
+        run: aws s3 cp ../app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}
 
       - name: Run OWASP ZAP Scan
         run: bash ./scripts/zap-scan.sh

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DevSecOps Serverless API Stack - Fixed for unique resource naming and validation.'
+Description: 'DevSecOps Serverless API Stack'
 
 Parameters:
   CodeBucket:
@@ -13,6 +13,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: DevSecOpsLambdaExecutionRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -26,6 +27,7 @@ Resources:
   ApiFunction:
     Type: AWS::Lambda::Function
     Properties:
+      FunctionName: DevSecOpsApiFunction
       Runtime: nodejs18.x
       Handler: index.handler
       Code:
@@ -57,7 +59,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiFunction.Arn}/invocations'
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiFunction.Arn}/invocations
 
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
@@ -72,11 +74,12 @@ Resources:
       FunctionName: !Ref ApiFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}:${ApiGateway}/*'
+      SourceArn: !Sub arn:aws:apigateway:${AWS::Region}::${ApiGateway}/*
 
 Outputs:
   ApiUrl:
     Description: URL of the API Gateway
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/hello'
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/hello
     Export:
-      Name: DevSecOpsApiUrlManual
+      Name: DevSecOpsApiUrlAppRunner   # <-- make this unique
+

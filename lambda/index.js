@@ -1,14 +1,19 @@
+// Lambda handler for DevSecOps API
 const handler = async (event) => {
     try {
         console.log('Event received:', JSON.stringify(event, null, 2));
-        const { name } = event.queryStringParameters || {};
-        const message = name ? `Hello, ${name}! Welcome to the DevSecOps API.` : 'Hello from DevSecOps API!';
+
+        // Get 'name' from query string, if provided
+        const name = event.queryStringParameters?.name || null;
+        const message = name 
+            ? `Hello, ${name}! Welcome to the DevSecOps API.` 
+            : 'Hello from DevSecOps API!';
 
         return {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*', // For CORS if needed
+                'Access-Control-Allow-Origin': '*', // Enable CORS
             },
             body: JSON.stringify({ message }),
         };
@@ -25,4 +30,5 @@ const handler = async (event) => {
     }
 };
 
+// Export the handler
 module.exports = { handler };

@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up AWS CLI
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -32,11 +32,12 @@ jobs:
             --region us-east-1 \
             --parameter-overrides \
               CodeBucket=my-app-bucket-name \
-              CodeKey=app.zip
+              CodeKey=app.zip \
+            --no-fail-on-empty-changeset
 
-      - name: Get App Runner Service URL
+      - name: Get API URL
         run: |
           aws cloudformation describe-stacks \
             --stack-name DevSecOpsAppRunnerStack \
-            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
             --output text

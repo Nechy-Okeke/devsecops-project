@@ -1,82 +1,62 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DevSecOps Serverless API Stack with Lambda and API Gateway'
+name: DevSecOps CI/CD Pipeline
 
-Parameters:
-  CodeBucket:
-    Type: String
-    Description: S3 bucket containing the Lambda code
-  CodeKey:
-    Type: String
-    Description: S3 key for the Lambda code zip
+on:
+  push:
+    branches:
+      - main
 
-Resources:
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+jobs:
+  build-test-scan-deploy:
+    runs-on: ubuntu-latest
 
-  ApiFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Runtime: nodejs18.x
-      Handler: index.handler
-      Code:
-        S3Bucket: !Ref CodeBucket
-        S3Key: !Ref CodeKey
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 30
+    env:
+      AWS_REGION: us-east-1
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_KEY: ${{ secrets.S3_KEY }}
+      STACK_NAME: DevSecOpsAppRunnerStack
 
-  ApiGateway:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: DevSecOpsApi
-      Description: API for DevSecOps demo
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-  ApiResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: 'hello'
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-  ApiMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiResource
-      HttpMethod: GET
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiFunction.Arn}/invocations'
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./app
 
-  ApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiMethod
-    Properties:
-      RestApiId: !Ref ApiGateway
-      StageName: prod
+      - name: Run tests
+        run: npm test
+        working-directory: ./app
 
-  LambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ApiFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/*/*'
+      - name: Build app zip
+        run: |
+          zip -r ../app.zip .
+        working-directory: ./app
 
-Outputs:
-  ApiUrl:
-    Description: URL of the API Gateway
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/hello'
-    Export:
-      Name: DevSecOpsApiUrl
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload app.zip to S3
+        run: aws s3 cp ../app.zip s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}
+
+      - name: Run OWASP ZAP Scan
+        run: bash ./scripts/zap-scan.sh
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/template.yml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --capabilities CAPABILITY_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --parameter-overrides \
+              CodeBucket=${{ env.S3_BUCKET }} \
+              CodeKey=${{ env.S3_KEY }}

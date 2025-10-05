@@ -84,16 +84,16 @@ jobs:
         # This step runs your ZAP script against the newly deployed URL
         run: bash ./scripts/zap-scan.sh ${{ env.API_URL }}
 
-      # --- NEW STEP 1: Upload the ZAP Report ---
+      # --- UPDATED STEP: NOW USING V4 (Non-Deprecated) ---
       - name: Upload ZAP Scan Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # <<< CHANGED from v3 to v4
         with:
           name: ZAP-Security-Report
           # *** IMPORTANT: UPDATE THIS PATH IF YOUR SCRIPT SAVES THE REPORT ELSEWHERE ***
           path: ZAP_Report.html 
           if-no-files-found: warn
 
-      # --- NEW STEP 2: Optional Cleanup (Highly Recommended) ---
+      # --- Optional Cleanup (Highly Recommended) ---
       - name: Clean up deployed stack (Optional for testing, depends on environment)
         # You may want to comment this out if you need the service to persist
         run: aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}

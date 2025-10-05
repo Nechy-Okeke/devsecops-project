@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DevSecOps Serverless API Stack - Fixed for unique resource naming.'
+Description: 'DevSecOps Serverless API Stack - Fixed for unique resource naming and validation.'
 
 Parameters:
 CodeBucket:
@@ -26,9 +26,8 @@ ManagedPolicyArns:
 ApiFunction:
 Type: AWS::Lambda::Function
 Properties:
-# FIX APPLIED: Removed 'FunctionName' property. CloudFormation will now
-# generate a unique name (e.g., DevSecOpsAppRunnerStack-ApiFunction-XYZ)
-# preventing the conflict error.
+# FIX APPLIED: Removed 'FunctionName' property to allow dynamic naming
+# and corrected YAML indentation for validation.
 Runtime: nodejs18.x
 Handler: index.handler
 Code:

@@ -32,6 +32,9 @@ jobs:
         run: npm test
         working-directory: ./app
 
+      - name: Install zip utility
+        run: sudo apt-get update && sudo apt-get install -y zip
+
       - name: Build app zip
         run: |
           pwd

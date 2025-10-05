@@ -1,43 +1,82 @@
-name: Deploy AppRunner Service
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DevSecOps Serverless API Stack with Lambda and API Gateway'
 
-on:
-  push:
-    branches:
-      - main
+Parameters:
+  CodeBucket:
+    Type: String
+    Description: S3 bucket containing the Lambda code
+  CodeKey:
+    Type: String
+    Description: S3 key for the Lambda code zip
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Code:
+        S3Bucket: !Ref CodeBucket
+        S3Key: !Ref CodeKey
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: DevSecOpsApi
+      Description: API for DevSecOps demo
 
-      - name: Validate CloudFormation Template
-        run: aws cloudformation validate-template --template-body file://cloudformation/template.yml
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'hello'
 
-      - name: Deploy CloudFormation Stack
-        run: |
-          aws cloudformation deploy \
-            --template-file cloudformation/template.yml \
-            --stack-name DevSecOpsAppRunnerStack \
-            --capabilities CAPABILITY_IAM \
-            --region us-east-1 \
-            --parameter-overrides \
-              CodeBucket=my-app-bucket-name \
-              CodeKey=app.zip \
-            --no-fail-on-empty-changeset
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiFunction.Arn}/invocations'
 
-      - name: Get API URL
-        run: |
-          aws cloudformation describe-stacks \
-            --stack-name DevSecOpsAppRunnerStack \
-            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
-            --output text
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: prod
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/*/*'
+
+Outputs:
+  ApiUrl:
+    Description: URL of the API Gateway
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/hello'
+    Export:
+      Name: DevSecOpsApiUrl

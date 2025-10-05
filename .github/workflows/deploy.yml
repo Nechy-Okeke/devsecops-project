@@ -1,83 +1,187 @@
-name: Deploy to AWS with OWASP ZAP Scan
+name: DevSecOps CI/CD
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  AWS_REGION: us-east-1
-  STACK_NAME: DevSecOpsStack
-  TEMPLATE_FILE: infra/cloudformation/apprunner-template.yaml
-  SERVICE_NAME: DevSecOpsService
-
-permissions:
-  contents: read
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd app
+          npm install
+
+      - name: Lint
+        run: |
+          cd app
+          npm run lint
+
+      - name: Test
+        run: |
+          cd app
+          npm run test
+
+      - name: Package Lambda
+        run: |
+          cd app
+          zip -r ../lambda-function.zip .
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp lambda-function.zip s3://${{ secrets.AWS_S3_BUCKET }}/lambda-function.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run CodeQL Init
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript
+
+      - name: CodeQL Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: CodeQL Analyze
+        uses: github/codeql-action/analyze@v2
+
   deploy:
     runs-on: ubuntu-latest
-
+    needs: security-scan
+    if: github.ref == 'refs/heads/main'
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Validate CloudFormation Template
+        run: aws cloudformation validate-template --template-body file://cloudformation/apprunner-template.yaml
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Check if Stack Exists
+        id: check-stack
+        run: |
+          if aws cloudformation describe-stacks --stack-name DevSecOpsStack --query 'Stacks[0].StackStatus' --output text 2>/dev/null; then
+            echo "stack_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "stack_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Create Stack (if new)
+        if: steps.check-stack.outputs.stack_exists == 'false'
+        run: |
+          aws cloudformation create-stack \
+            --stack-name DevSecOpsStack \
+            --template-body file://cloudformation/apprunner-template.yaml \
+            --parameters ParameterKey=CodeBucket,ParameterValue=${{ secrets.AWS_S3_BUCKET }} ParameterKey=CodeKey,ParameterValue=lambda-function.zip \
+            --capabilities CAPABILITY_NAMED_IAM
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Wait for Stack Creation
+        if: steps.check-stack.outputs.stack_exists == 'false'
+        run: aws cloudformation wait stack-create-complete --stack-name DevSecOpsStack
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Create or Update Change Set
+        if: steps.check-stack.outputs.stack_exists == 'true'
+        run: |
+          aws cloudformation delete-change-set --stack-name DevSecOpsStack --change-set-name MyChangeSet || true
+          aws cloudformation create-change-set \
+            --stack-name DevSecOpsStack \
+            --template-body file://cloudformation/apprunner-template.yaml \
+            --parameters ParameterKey=CodeBucket,ParameterValue=${{ secrets.AWS_S3_BUCKET }} ParameterKey=CodeKey,ParameterValue=lambda-function.zip \
+            --change-set-name MyChangeSet \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --description "DevSecOps deployment"
+          
+          CHANGESET_STATUS=$(aws cloudformation describe-change-set --stack-name DevSecOpsStack --change-set-name MyChangeSet --query 'Status' --output text)
+          if [ "$CHANGESET_STATUS" != "FAILED" ]; then
+            aws cloudformation execute-change-set --stack-name DevSecOpsStack --change-set-name MyChangeSet
+          else
+            echo "No updates to perform, skipping execution."
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+  zap-scan:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Validate CloudFormation Template
-        run: aws cloudformation validate-template --template-body file://${{ env.TEMPLATE_FILE }}
-
-      # If the stack exists, update; otherwise, create
-      - name: Create or Update CloudFormation Stack
+      - name: Get API URL
+        id: api-url
         run: |
-          echo "Checking if stack exists..."
-          if aws cloudformation describe-stacks --stack-name $STACK_NAME >/dev/null 2>&1; then
-            echo "Updating existing stack..."
-            aws cloudformation update-stack \
-              --stack-name $STACK_NAME \
-              --template-body file://${{ env.TEMPLATE_FILE }} \
-              --capabilities CAPABILITY_IAM || echo "No updates to perform"
-          else
-            echo "Creating new stack..."
-            aws cloudformation create-stack \
-              --stack-name $STACK_NAME \
-              --template-body file://${{ env.TEMPLATE_FILE }} \
-              --capabilities CAPABILITY_IAM
-          fi
-
-      - name: Wait for Stack to Stabilize
-        run: |
-          echo "Waiting for stack to complete..."
-          aws cloudformation wait stack-create-complete --stack-name $STACK_NAME 2>/dev/null || \
-          aws cloudformation wait stack-update-complete --stack-name $STACK_NAME 2>/dev/null || \
-          echo "Stack is up to date or already exists."
-
-      - name: Retrieve App Runner Service URL
-        id: apprunner
-        run: |
-          SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${{ env.SERVICE_NAME }}'].ServiceArn" --output text)
-          echo "SERVICE_ARN=$SERVICE_ARN" >> $GITHUB_ENV
-
-          SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text)
-          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-          echo "App Runner URL: $SERVICE_URL"
+          API_URL=$(aws cloudformation describe-stacks --stack-name DevSecOpsStack --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text)
+          echo "url=$API_URL" >> $GITHUB_OUTPUT
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
       - name: Run OWASP ZAP Baseline Scan
         run: |
           echo "Starting OWASP ZAP baseline scan..."
-          docker run --rm \
-            -v $(pwd):/zap/wrk/:rw \
-            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-            -t $SERVICE_URL \
-            -r zap_report.html || echo "ZAP scan completed with warnings."
+          TARGET_URL="${{ steps.api-url.outputs.url }}"
+          echo "Scanning target: $TARGET_URL"
 
-      - name: Upload ZAP Report Artifact
+          mkdir -p zap-reports
+          docker run --rm \
+            -v $(pwd)/zap-reports:/zap/wrk:rw \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t "$TARGET_URL" \
+            -r zap_report.html \
+            -J zap_report.json \
+            -w zap_report.md \
+            -I || true
+
+          echo "ZAP baseline scan completed."
+          ls -l zap-reports/
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Upload ZAP Scan Reports
         uses: actions/upload-artifact@v4
         with:
-          name: zap-report
-          path: zap_report.html
+          name: zap-scan-reports
+          path: zap-reports/

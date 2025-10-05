@@ -80,7 +80,11 @@ jobs:
         # Add a short delay to ensure App Runner service is ready to receive traffic before scanning
         run: sleep 60s
 
-      # --- MODIFIED STEP: Replaced shell script with direct, reliable Docker run command ---
+      # --- NEW STEP: Explicitly pull the ZAP Docker image ---
+      - name: Pre-pull ZAP Docker Image
+        run: docker pull owasp/zap2docker-stable:stable
+      
+      # --- MODIFIED STEP: Use explicit tag for increased reliability ---
       - name: Run OWASP ZAP Full Scan
         # Runs the ZAP scan using the official, stable Docker image.
         # It mounts the current directory (pwd) to /zap/wrk in the container 
@@ -88,7 +92,7 @@ jobs:
         run: |
           docker run \
             -v ${{ github.workspace }}:/zap/wrk/:rw \
-            owasp/zap2docker-stable \
+            owasp/zap2docker-stable:stable \
             zap-full-scan.py -t ${{ env.API_URL }} -r /zap/wrk/ZAP_Report.html
 
       # --- UPDATED STEP: NOW USING V4 (Non-Deprecated) ---

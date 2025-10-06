@@ -75,4 +75,3 @@ jobs:
 
       - name: Run OWASP ZAP Scan
         run: bash ./scripts/zap-scan.sh ${{ env.API_URL }} --skip-zap
-this is my workflow so where will i get the report
